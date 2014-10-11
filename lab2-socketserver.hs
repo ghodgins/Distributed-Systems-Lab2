@@ -3,6 +3,11 @@ import Network.Socket
 import System.Environment
 import System.IO
 import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Exception
+import Data.List.Split
+
+maxThreadCount = 2
 
 main:: IO ()
 main = withSocketsDo $ do
@@ -19,48 +24,69 @@ main = withSocketsDo $ do
 	putStrLn $ "Listening on " ++ (head args)
 
 	chan <- newChan
+	threadCount <- atomically $ newTVar 0
 
-	forkIO $ sockHandler sock chan
+	forkIO $ sockHandler sock chan threadCount
 
-	chanHandler sock chan
+	mainHandler sock chan
 
-chanHandler :: Socket -> Chan String -> IO ()
-chanHandler sock chan = do
+mainHandler :: Socket -> Chan String -> IO ()
+mainHandler sock chan = do
 	chanMsg <- readChan chan
 
 	case (chanMsg) of
-		("KILL_SERVICE") -> putStrLn "Service is now terminating"
-		_ -> chanHandler sock chan
+		("KILL_SERVICE") -> putStrLn "Service is now terminating!"
+		_ -> mainHandler sock chan
 
-sockHandler :: Socket -> Chan String -> IO ()
-sockHandler sock chan = do
+sockHandler :: Socket -> Chan String -> TVar Int -> IO ()
+sockHandler sock chan threadCount = do
 	(s, addr) <- accept sock
 	handle <- socketToHandle s ReadWriteMode
 	hSetBuffering handle NoBuffering
-	forkIO $ commandProcessor handle chan addr
-	sockHandler sock chan
 
-commandProcessor :: Handle -> Chan String -> SockAddr -> IO ()
-commandProcessor handle chan addr = do
+	count <- atomically $ readTVar threadCount
+	putStrLn $ "threadCount = " ++ show count
+
+	if (count < maxThreadCount) then do
+		forkFinally (commandProcessor handle chan addr threadCount) (\_ -> atomically $ decrementTVar threadCount)
+		atomically $ incrementTVar threadCount
+		else do
+			hPutStrLn handle "Service reached maximum capacity, please try again later!"
+			hClose handle
+
+	sockHandler sock chan threadCount
+
+commandProcessor :: Handle -> Chan String -> SockAddr -> TVar Int -> IO ()
+commandProcessor handle chan addr threadCount = do
 	line <- hGetLine handle
+	let cmd = words line
 
-	let cmd = filter (/='\r') line
-
-	case (cmd) of
-		("HELO text") -> heloCommand handle chan addr
+	case (head cmd) of
+		("HELO") -> heloCommand handle chan addr threadCount (unwords (tail cmd))
 		("KILL_SERVICE") -> killCommand handle chan
 		_ -> do hPutStrLn handle ("Unknown Command - " ++ line)
-	commandProcessor handle chan addr
+	commandProcessor handle chan addr threadCount
 
-heloCommand :: Handle -> Chan String -> SockAddr -> IO ()
-heloCommand handle chan addr = do
+heloCommand :: Handle -> Chan String -> SockAddr -> TVar Int -> String -> IO ()
+heloCommand handle chan sockAddr threadCount msg = do
 	writeChan chan "HELO command processed!"
-	hPutStrLn handle "HELO text\n\
-	                 \IP:[ip address]\n\
-	                 \Port:8080\n\
-	                 \StudentID:11396966"
+
+	let addr = splitOn ":" $ show sockAddr
+	let addrIP = addr !! 0
+	let addrPort = addr !! 1
+
+	hPutStrLn handle $	"HELO "++msg++"\n\
+	                 	\IP: " ++ addrIP ++ "\n\
+	                 	\Port: " ++ addrPort ++ "\n\
+	                 	\StudentID:11396966"
 
 killCommand :: Handle -> Chan String -> IO ()
 killCommand handle chan = do
 	hPutStrLn handle "Service is now terminating!"
 	writeChan chan "KILL_SERVICE"
+
+incrementTVar :: TVar Int -> STM ()
+incrementTVar tv = modifyTVar tv ((+) 1)
+
+decrementTVar :: TVar Int -> STM ()
+decrementTVar tv = modifyTVar tv (subtract 1)
