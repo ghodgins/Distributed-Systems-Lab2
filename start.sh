@@ -1,2 +1,5 @@
 #!/bin/bash
-./lab2-socketserver $1
+
+port=${1-8080}
+
+./lab2-socketserver $port
