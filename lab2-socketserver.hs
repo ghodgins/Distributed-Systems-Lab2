@@ -68,12 +68,16 @@ commandProcessor handle chan addr threadCount = do
 	commandProcessor handle chan addr threadCount
 
 heloCommand :: Handle -> Chan String -> SockAddr -> TVar Int -> String -> IO ()
-heloCommand handle chan (SockAddrInet addrIP addrPort) threadCount msg = do
+heloCommand handle chan sockAddr threadCount msg = do
 	writeChan chan "HELO command processed!"
 
-	hPutStrLn handle $	"HELO "++msg++"\n\
-	                 	\IP: " ++ show addrIP ++ "\n\
-	                 	\Port: " ++ show addrPort ++ "\n\
+	let addr = splitOn ":" $ show sockAddr
+	let addrIP = addr !! 0
+	let addrPort = addr !! 1
+
+	hPutStrLn handle $	"HELO " ++ msg ++ "\n\
+	                 	\IP: " ++ addrIP ++ "\n\
+	                 	\Port: " ++ addrPort ++ "\n\
 	                 	\StudentID:11396966"
 
 killCommand :: Handle -> Chan String -> IO ()
