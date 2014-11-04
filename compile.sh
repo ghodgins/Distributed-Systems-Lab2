@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo ghc lab2-socketserver.hs -XRecordWildCards
+ghc lab2-socketserver.hs -XRecordWildCards
