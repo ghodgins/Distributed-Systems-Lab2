@@ -19,13 +19,17 @@ maxThreadCount = 16
 main:: IO ()
 main = withSocketsDo $ do
   args <- getArgs
-  let port = head args
+  let address = args !! 0
+  let port = args !! 1
 
-  sock <- listenOn $ PortNumber $ fromIntegral $ read port
+  --sock <- listenOn $ PortNumber $ fromIntegral $ read port
 
-  addr <- getSocketName sock
-  let address = show addr
-  putStrLn $ address
+  addrinfos <- getAddrInfo Nothing (Just address) (Just port)
+  let serveraddr = head addrinfos
+  sock <- socket (addrFamily serveraddr) Stream defaultProtocol
+  setSocketOption sock ReuseAddr 1
+  bindSocket sock (addrAddress serveraddr)
+  listen sock 5
 
   putStrLn $ "Listening on " ++ port
 
