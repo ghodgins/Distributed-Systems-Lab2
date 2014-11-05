@@ -22,18 +22,7 @@ main = withSocketsDo $ do
   let address = args !! 0
   let port = args !! 1
 
-  --sock <- listenOn $ PortNumber $ fromIntegral $ read port
-
-  addrinfos <- getAddrInfo (Just (defaultHints {addrFlags = [AI_PASSIVE]}))
-                           (Just address) (Just port)
-  let serveraddr = head addrinfos
-
-  sock <- socket (addrFamily serveraddr) Stream defaultProtocol
-
-  bindSocket sock (addrAddress serveraddr)
-  
-  listen sock 5
-  setSocketOption sock ReuseAddr 1
+  sock <- listenOn $ PortNumber $ fromIntegral $ read port
 
   putStrLn $ "Listening on " ++ port
 
