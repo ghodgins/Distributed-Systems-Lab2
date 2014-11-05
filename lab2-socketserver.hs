@@ -3,7 +3,7 @@ import Network hiding (accept)
 import Network.Socket
 import System.Environment
 import System.IO
-import Control.Concurrent hiding (forkFinally)
+import Control.Concurrent {- hiding (forkFinally) instead using myFOrkFinally to avoid GHC version issues-}
 import Control.Concurrent.STM
 import Control.Exception
 import Data.List.Split
@@ -53,7 +53,7 @@ acceptHandler sock chan threadCount server = do
   putStrLn $ "threadCount = " ++ show count
 
   if (count < maxThreadCount) then do
-    forkFinally (clientHandler handle chan server threadCount) (\_ -> atomically $ decrementTVar threadCount)
+    myForkFinally (clientHandler handle chan server threadCount) (\_ -> atomically $ decrementTVar threadCount)
     atomically $ incrementTVar threadCount
     else do
       hPutStrLn handle "Service reached maximum capacity, please try again later!"
@@ -95,7 +95,7 @@ incrementTVar tv = modifyTVar tv ((+) 1)
 decrementTVar :: TVar Int -> STM ()
 decrementTVar tv = modifyTVar tv (subtract 1)
 
-forkFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
-forkFinally action and_then =
+myForkFinally :: IO a -> (Either SomeException a -> IO ()) -> IO ThreadId
+myForkFinally action and_then =
   mask $ \restore ->
     forkIO $ try (restore action) >>= and_then
